@@ -1,39 +1,35 @@
 from flask import Flask, request, jsonify, render_template
-import hashlib, os, datetime, random
+from pymongo import MongoClient
+import bcrypt
+import datetime
+import random
 
 app = Flask(__name__)
 
-# In-memory "databases" to simulate MongoDB collections.
-user_profiles = {}         # key: user_id, value: profile document
-user_authentications = {}  # key: user_id, value: authentication document
+# Connect to your local MongoDB instance.
+client = MongoClient("mongodb://localhost:27017")
+db = client.indian_energy_exchange
+user_profiles_collection = db.user_profiles
+user_authentications_collection = db.user_authentications
 
 def generate_user_id() -> str:
     """Generate a unique user_id in the form 'U1234'."""
     while True:
         user_id = f"U{random.randint(1000, 9999)}"
-        if user_id not in user_profiles:
+        # Check if this user_id already exists in the user_profiles collection.
+        if user_profiles_collection.find_one({"user_id": user_id}) is None:
             return user_id
 
-def hash_password(password: str) -> dict:
-    """Hash a password using PBKDF2-HMAC-SHA256 with a random salt."""
-    salt = os.urandom(16)  # 16-byte random salt
-    iterations = 100000    # Work factor for security
-    hashed = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, iterations)
-    return {
-        'current_hash': hashed.hex(),
-        'salt': salt.hex(),
-        'iterations': iterations,
-        'last_updated': datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        'updates': []
-    }
+def hash_password(password: str) -> str:
+    """Hash a password using bcrypt which automatically salts."""
+    # bcrypt.gensalt() generates a salt and applies a cost factor.
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
+    return hashed.decode('utf-8')
 
-def verify_password(stored_data: dict, provided_password: str) -> bool:
-    """Verify a provided password against the stored authentication data."""
-    salt = bytes.fromhex(stored_data['salt'])
-    iterations = stored_data['iterations']
-    stored_hash = stored_data['current_hash']
-    new_hash = hashlib.pbkdf2_hmac('sha256', provided_password.encode('utf-8'), salt, iterations)
-    return new_hash.hex() == stored_hash
+def verify_password(stored_hash: str, provided_password: str) -> bool:
+    """Verify a provided password using bcrypt."""
+    return bcrypt.checkpw(provided_password.encode('utf-8'), stored_hash.encode('utf-8'))
 
 @app.route('/')
 def index():
@@ -43,7 +39,7 @@ def index():
 @app.route('/signup', methods=['POST'])
 def signup():
     data = request.get_json()
-    # Extract fields from the incoming JSON payload.
+    # Extract data sent from the front-end
     name = data.get('name')
     user_category = data.get('user_category')
     user_type = data.get('user_type') if user_category == "User" else ""
@@ -51,42 +47,50 @@ def signup():
     eco_index = data.get('eco_index')
     password = data.get('password')
     captcha_answer = data.get('captcha_answer')
-    client_captcha = data.get('client_captcha')  # expected answer provided by client
+    client_captcha = data.get('client_captcha')  # Expected answer provided by client
     
-    # (Captcha validation would normally be done on the server too.)
-    if int(captcha_answer) != int(client_captcha):
-        return jsonify({"status": "error", "message": "Captcha verification failed"}), 400
-    
-    # Validate required fields.
+    # Validate captcha (here we simply compare the numbers)
+    try:
+        if int(captcha_answer) != int(client_captcha):
+            return jsonify({"status": "error", "message": "Captcha verification failed"}), 400
+    except ValueError:
+        return jsonify({"status": "error", "message": "Invalid captcha input"}), 400
+
+    # Validate required fields (for simplicity, only basic validation)
     if not all([name, user_category, eco_index, password]):
         return jsonify({"status": "error", "message": "Missing required fields"}), 400
-    
-    # Generate a unique user_id.
+
+    # Generate a unique user_id and get the current time (ISO 8601)
     user_id = generate_user_id()
     created_on = datetime.datetime.now(datetime.timezone.utc).isoformat()
-    
-    # Create the user_profile document.
+
+    # Create user_profile document
     user_profile = {
         "user_id": user_id,
         "name": name,
-        "user_category": user_category,  # Allowed: ["Admin", "User"]
-        "user_type": user_type,          # Allowed: ["Individual", "Organisation"] – empty for admins
-        "location": location,            # empty for admins
+        "user_category": user_category,         # Allowed: ["Admin", "User"]
+        "user_type": user_type,                 # Allowed: ["Individual", "Organisation"] – empty for admins
+        "location": location,                   # Empty for admins
         "created_on": created_on,
-        "eco_index": eco_index,          # Allowed: ["A", "B", "C", "D", "E", "F", "G"]
-        "linked_infrastructures": []     # Initially empty
+        "eco_index": eco_index,                 # Allowed: ["A", "B", "C", "D", "E", "F", "G"]
+        "linked_infrastructures": []            # Initially empty
     }
-    user_profiles[user_id] = user_profile
-    
-    # Create the user_authentication document.
-    password_data = hash_password(password)
+    # Insert into MongoDB
+    user_profiles_collection.insert_one(user_profile)
+
+    # Hash the password and create user_authentication document
+    hashed_pw = hash_password(password)
     user_auth = {
         "user_id": user_id,
-        "password": password_data
+        "password": {
+            "current_hash": hashed_pw,
+            "updates": [],  # Future updates can be appended here.
+            "last_updated": created_on
+        }
     }
-    user_authentications[user_id] = user_auth
-    
-    # For demonstration, return a welcome message with the user's profile.
+    user_authentications_collection.insert_one(user_auth)
+
+    # Return success response along with the user profile details.
     return jsonify({"status": "success", "message": f"Welcome, {name}!", "user_profile": user_profile})
 
 @app.route('/login', methods=['POST'])
@@ -94,17 +98,17 @@ def login():
     data = request.get_json()
     identifier = data.get('identifier')
     password = data.get('password')
-    
-    # For this demo, we assume the identifier is the user_id.
-    # In a full implementation, you might search by name or linked infrastructure.
+
     if not identifier or not password:
         return jsonify({"status": "error", "message": "Missing required fields"}), 400
-    
-    user_auth = user_authentications.get(identifier)
+
+    # For simplicity, we assume identifier is the user_id.
+    user_auth = user_authentications_collection.find_one({"user_id": identifier})
     if not user_auth:
         return jsonify({"status": "error", "message": "User does not exist"}), 400
 
-    if verify_password(user_auth["password"], password):
+    stored_hash = user_auth["password"]["current_hash"]
+    if verify_password(stored_hash, password):
         return jsonify({"status": "success", "message": "Login successful"})
     else:
         return jsonify({"status": "error", "message": "Invalid password"}), 400
