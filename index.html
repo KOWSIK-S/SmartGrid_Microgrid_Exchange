@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Indian Energy Exchange - User Authentication</title>
+  <title>Indian Energy Exchange - Signup/Login</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -65,7 +65,7 @@
   <!-- Signup Form -->
   <div class="container hidden" id="signupForm">
     <h2>Signup</h2>
-    <!-- New Fields for the User Profile -->
+    <!-- Profile Fields -->
     <input type="text" id="name" placeholder="Name">
     
     <select id="user_category" onchange="toggleUserDetails()">
@@ -94,7 +94,7 @@
       <option value="G">G</option>
     </select>
     
-    <!-- Password and Confirmation -->
+    <!-- Authentication Fields -->
     <input type="password" id="signupPass" placeholder="Password" oninput="checkStrength()">
     <p id="strength"></p>
     <input type="password" id="confirmPass" placeholder="Confirm Password">
@@ -108,7 +108,7 @@
   </div>
   
   <script>
-    // Toggle between forms
+    // Toggle between login and signup forms
     function showLogin() {
       document.getElementById("loginForm").classList.remove("hidden");
       document.getElementById("signupForm").classList.add("hidden");
@@ -120,7 +120,7 @@
       correctCaptcha = generateCaptcha();
     }
     
-    // Show or hide user-specific details based on user_category.
+    // Show/hide user-specific details based on user_category
     function toggleUserDetails() {
       const category = document.getElementById("user_category").value;
       const userDetails = document.getElementById("userDetails");
@@ -131,11 +131,10 @@
       }
     }
     
-    // Enhanced password strength checker.
+    // Password strength checker
     function checkStrength() {
       const pass = document.getElementById("signupPass").value;
       const strengthText = document.getElementById("strength");
-      
       let strength = 0;
       if (pass.length >= 8) strength++;
       if (pass.match(/[A-Z]/)) strength++;
@@ -155,7 +154,7 @@
       }
     }
     
-    // Generate a simple arithmetic captcha.
+    // Generate a simple arithmetic captcha
     function generateCaptcha() {
       const a = Math.floor(Math.random() * 10) + 1;
       const b = Math.floor(Math.random() * 10) + 1;
@@ -165,7 +164,7 @@
     
     let correctCaptcha = generateCaptcha();
     
-    // Signup function sends a POST request to /signup.
+    // Signup function using fetch to call the /signup endpoint
     async function signup() {
       const name = document.getElementById("name").value;
       const user_category = document.getElementById("user_category").value;
@@ -208,8 +207,8 @@
         const result = await response.json();
         messageP.innerText = result.message;
         if(result.status === "success"){
-          // Optionally, display a welcome page or redirect.
-          document.getElementById("signupForm").innerHTML = `<h2>${result.message}</h2><p>Your user profile:</p><pre>${JSON.stringify(result.user_profile, null, 2)}</pre>`;
+          // Show welcome message with user profile details.
+          document.getElementById("signupForm").innerHTML = `<h2>${result.message}</h2><pre>${JSON.stringify(result.user_profile, null, 2)}</pre>`;
         }
       } catch (error) {
         messageP.innerText = "Error during signup.";
@@ -218,7 +217,7 @@
       correctCaptcha = generateCaptcha();
     }
     
-    // Login function sends a POST request to /login.
+    // Login function using fetch to call the /login endpoint
     async function login() {
       const identifier = document.getElementById("loginIdentifier").value;
       const pass = document.getElementById("loginPass").value;
