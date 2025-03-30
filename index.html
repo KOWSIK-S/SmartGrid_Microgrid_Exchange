@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Indian Energy Exchange - User Authentication</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin: 50px;
+      background: #f9f9f9;
+    }
+    .container {
+      max-width: 500px;
+      margin: auto;
+      padding: 20px;
+      border: 1px solid #ccc;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    input, select {
+      width: 90%;
+      padding: 10px;
+      margin: 10px 0;
+      font-size: 16px;
+    }
+    button {
+      padding: 10px 20px;
+      margin: 10px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    .hidden {
+      display: none;
+    }
+    h1, h2 {
+      color: #333;
+    }
+    p {
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Welcome to Indian Energy Exchange</h1>
+  
+  <!-- Landing Page -->
+  <div class="container" id="dashboard">
+    <button onclick="showLogin()">Login</button>
+    <button onclick="showSignup()">Signup</button>
+  </div>
+  
+  <!-- Login Form -->
+  <div class="container hidden" id="loginForm">
+    <h2>Login</h2>
+    <!-- For demo, we assume identifier is the user_id -->
+    <input type="text" id="loginIdentifier" placeholder="User ID">
+    <input type="password" id="loginPass" placeholder="Password">
+    <button onclick="login()">Login</button>
+    <p id="loginMessage"></p>
+  </div>
+  
+  <!-- Signup Form -->
+  <div class="container hidden" id="signupForm">
+    <h2>Signup</h2>
+    <!-- New Fields for the User Profile -->
+    <input type="text" id="name" placeholder="Name">
+    
+    <select id="user_category" onchange="toggleUserDetails()">
+      <option value="">Select User Category</option>
+      <option value="Admin">Admin</option>
+      <option value="User">User</option>
+    </select>
+    
+    <div id="userDetails" class="hidden">
+      <select id="user_type">
+        <option value="">Select User Type</option>
+        <option value="Individual">Individual</option>
+        <option value="Organisation">Organisation</option>
+      </select>
+      <input type="text" id="location" placeholder="Location">
+    </div>
+    
+    <select id="eco_index">
+      <option value="">Select Eco Index</option>
+      <option value="A">A</option>
+      <option value="B">B</option>
+      <option value="C">C</option>
+      <option value="D">D</option>
+      <option value="E">E</option>
+      <option value="F">F</option>
+      <option value="G">G</option>
+    </select>
+    
+    <!-- Password and Confirmation -->
+    <input type="password" id="signupPass" placeholder="Password" oninput="checkStrength()">
+    <p id="strength"></p>
+    <input type="password" id="confirmPass" placeholder="Confirm Password">
+    
+    <!-- Captcha Section -->
+    <p id="captchaQuestion"></p>
+    <input type="text" id="captchaAnswer" placeholder="Your Answer">
+    
+    <button onclick="signup()">Signup</button>
+    <p id="signupMessage"></p>
+  </div>
+  
+  <script>
+    // Toggle between forms
+    function showLogin() {
+      document.getElementById("loginForm").classList.remove("hidden");
+      document.getElementById("signupForm").classList.add("hidden");
+    }
+    
+    function showSignup() {
+      document.getElementById("signupForm").classList.remove("hidden");
+      document.getElementById("loginForm").classList.add("hidden");
+      correctCaptcha = generateCaptcha();
+    }
+    
+    // Show or hide user-specific details based on user_category.
+    function toggleUserDetails() {
+      const category = document.getElementById("user_category").value;
+      const userDetails = document.getElementById("userDetails");
+      if (category === "User") {
+        userDetails.classList.remove("hidden");
+      } else {
+        userDetails.classList.add("hidden");
+      }
+    }
+    
+    // Enhanced password strength checker.
+    function checkStrength() {
+      const pass = document.getElementById("signupPass").value;
+      const strengthText = document.getElementById("strength");
+      
+      let strength = 0;
+      if (pass.length >= 8) strength++;
+      if (pass.match(/[A-Z]/)) strength++;
+      if (pass.match(/[a-z]/)) strength++;
+      if (pass.match(/[0-9]/)) strength++;
+      if (pass.match(/[\W_]/)) strength++;
+      
+      if (strength <= 2) {
+        strengthText.innerText = "Weak";
+        strengthText.style.color = "red";
+      } else if (strength === 3 || strength === 4) {
+        strengthText.innerText = "Medium";
+        strengthText.style.color = "orange";
+      } else if (strength === 5) {
+        strengthText.innerText = "Strong";
+        strengthText.style.color = "green";
+      }
+    }
+    
+    // Generate a simple arithmetic captcha.
+    function generateCaptcha() {
+      const a = Math.floor(Math.random() * 10) + 1;
+      const b = Math.floor(Math.random() * 10) + 1;
+      document.getElementById('captchaQuestion').innerText = `What is ${a} + ${b}?`;
+      return a + b;
+    }
+    
+    let correctCaptcha = generateCaptcha();
+    
+    // Signup function sends a POST request to /signup.
+    async function signup() {
+      const name = document.getElementById("name").value;
+      const user_category = document.getElementById("user_category").value;
+      const user_type = document.getElementById("user_type").value;
+      const location = document.getElementById("location").value;
+      const eco_index = document.getElementById("eco_index").value;
+      const pass = document.getElementById("signupPass").value;
+      const confirmPass = document.getElementById("confirmPass").value;
+      const captchaAnswer = document.getElementById("captchaAnswer").value;
+      const messageP = document.getElementById("signupMessage");
+      
+      if (pass !== confirmPass) {
+        messageP.innerText = "Passwords do not match!";
+        return;
+      }
+      
+      if (parseInt(captchaAnswer) !== correctCaptcha) {
+        messageP.innerText = "Incorrect captcha answer!";
+        correctCaptcha = generateCaptcha();
+        return;
+      }
+      
+      const payload = {
+        name: name,
+        user_category: user_category,
+        user_type: user_category === "User" ? user_type : "",
+        location: user_category === "User" ? location : "",
+        eco_index: eco_index,
+        password: pass,
+        captcha_answer: captchaAnswer,
+        client_captcha: correctCaptcha
+      };
+      
+      try {
+        const response = await fetch('/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const result = await response.json();
+        messageP.innerText = result.message;
+        if(result.status === "success"){
+          // Optionally, display a welcome page or redirect.
+          document.getElementById("signupForm").innerHTML = `<h2>${result.message}</h2><p>Your user profile:</p><pre>${JSON.stringify(result.user_profile, null, 2)}</pre>`;
+        }
+      } catch (error) {
+        messageP.innerText = "Error during signup.";
+      }
+      
+      correctCaptcha = generateCaptcha();
+    }
+    
+    // Login function sends a POST request to /login.
+    async function login() {
+      const identifier = document.getElementById("loginIdentifier").value;
+      const pass = document.getElementById("loginPass").value;
+      const messageP = document.getElementById("loginMessage");
+      
+      const payload = {
+        identifier: identifier,
+        password: pass
+      };
+      
+      try {
+        const response = await fetch('/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const result = await response.json();
+        messageP.innerText = result.message;
+      } catch (error) {
+        messageP.innerText = "Error during login.";
+      }
+    }
+  </script>
+</body>
+</html>
